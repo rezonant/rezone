@@ -158,6 +158,53 @@ main();
 
 ```
 
+Possibly the most common use of Zones is Zone-local variables. `rezone` eliminates the untyped "zone properties" concept that is present in `zone.js` and the Zones proposal and replaces them with typed traversal of the ExecutionContext stack. 
+
+First, know that you can get the stack of currently executing zones at any time with:
+
+```typescript
+ExecutionContext.stack() // eg => [ DeepestContext, LoggerContext, ..., RootContext ]
+```
+
+This static method behaves differently when called from a subclass. The list of contexts returned is filtered by the calling type, like so:
+
+```typescript
+LoggerContext.stack() // eg => [ LoggerContext ]
+```
+
+As a shortcut, you can always get the first entry of the context stack by using `current()`:
+
+```typescript
+LoggerContext.current() // => LoggerContext
+```
+
+To create a "zone local variable", you simply create a property on your ExecutionContext subclass.
+For instance, to create a `requestId` "zone-local variable", you could write:
+
+```typescript
+export class RequestIdContext extends ExecutionContext {
+    constructor(
+        readonly requestId : string
+    ) {
+    }
+}
+```
+
+To then access `requestId`, use this:
+
+```typescript
+RequestIdContext.current().requestId
+```
+
+However, if there is no active `RequestIdContext`, then `.current()` will return `undefined`. 
+You can guard against this, or use the convenience method `.fetch()`:
+
+```typescript
+let theRequestId = RequestIdContext.fetch(context => context.requestId);
+```
+
+When there is a matching context (as returned by `.current()`), `.fetch()` will call your callback. If there is not a matching context, your callback is not called, and `undefined` is returned instead.
+
 ## How do I escape?
 
 You do not escape a `rezone`
@@ -187,8 +234,6 @@ the parent zone. One could instead implement
 this functionality as a zone-local variable,
 disabling the change detection code when
 the zone-local is appropriately set.
-
-(Zone local idioms coming soon)
 
 ## But what about zones interfering with exceptions in called code?
 

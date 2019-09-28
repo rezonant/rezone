@@ -4,26 +4,7 @@ import { BaseExecutionContext } from "./base-execution-context";
 import { ComposedExecutionContext } from "./composed-execution-context";
 
 export class ExecutionContext extends BaseExecutionContext implements IExecutionContext {
-    public static find(finder : (x : ExecutionContext) => boolean) : ExecutionContext {
-        return this.stack.find(finder);
-    }
-
     private taskMap = new WeakMap<Task, ExecutionTask>();
-
-    public static get stack() : ExecutionContext[] {
-        let zone = Zone.current;
-        let stack = [];
-
-        while (zone) {
-            let context = zone.get(`ec0:context`);
-            if (context)
-                stack.push(context);
-            
-            zone = zone.parent;
-        }
-
-        return stack;
-    }
 
     private static _root : ExecutionContext = null;
     public static get root() : ExecutionContext {
@@ -34,8 +15,36 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         return this._root;
     }
 
-    public static get current() : ExecutionContext {
-        return this.stack[0] || ExecutionContext.root;
+    public static stack<T extends typeof ExecutionContext>(this : T): InstanceType<T>[] {
+        let zone = Zone.current;
+        let stack : InstanceType<T>[] = [];
+
+        while (zone) {
+            let context = zone.get(`ec0:context`);
+            if (context && context instanceof this)
+                stack.push(<any>context);
+            
+            zone = zone.parent;
+        }
+
+        return stack;
+    }
+
+    public static current<T extends typeof ExecutionContext>(this : T): InstanceType<T> {
+        let stackTop = this.stack()[0];
+
+        if (this === ExecutionContext)
+            return stackTop || <any>ExecutionContext.root;
+        
+        return stackTop;
+    }
+
+    public static fetch<T extends typeof ExecutionContext, R>(this : T, callback : (context : InstanceType<T>) => R): R {
+        let context = this.current();
+        if (context)
+            return callback(context);
+        
+        return undefined;
     }
 
     public static compose(...contexts : ExecutionContext[]): IExecutionContext {

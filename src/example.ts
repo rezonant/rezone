@@ -27,12 +27,16 @@ export class LogExecutionContext extends ExecutionContext {
 }
 
 export class TrackExecutionContext extends ExecutionContext {
-    private counter = 0;
+    private _counter = 0;
+
+    get counter() {
+        return this._counter;
+    }
 
     schedule(task : ExecutionTask) {
-        this.counter += 1;
+        this._counter += 1;
         let decrement = () => {
-            if (--this.counter === 0)
+            if (--this._counter === 0)
                 this.emit('stable');
         };
 
@@ -56,8 +60,16 @@ function main() {
         setTimeout(() => {
             console.log('shouldve caught a frame');
             setTimeout(() => {
+
+            }, 2000);
+
+            setTimeout(() => {
+
+                let count = TrackExecutionContext.fetch(z => z.counter);
+                console.log(`depth count: ${count}`);
+
                 throw new Error('error here');
-            }, 3000)
+            }, 1000)
         }, 2000);
     });
 }
