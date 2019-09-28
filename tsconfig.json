@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "outDir": "dist",
+        "target": "es2018",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "declaration": true
+    },
+
+    "include": [
+        "./src/**/*.ts"
+    ]
+}
