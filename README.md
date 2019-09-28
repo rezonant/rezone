@@ -1,6 +1,14 @@
-# rezone
+# rezone [WIP]
 
-A streamlined take on the Zones API meant to be implementable as an ECMAScript standard feature.
+A streamlined take on the Zones API meant to be implementable as an ECMAScript standard feature. WARNING: This library is in the earliest development phase, it will change!
+
+## Background Reading
+
+- [Error handling in Zones proposal](https://github.com/domenic/zones/issues/9)
+- [Domain Module Postmortem](https://github.com/nodejs/node/blob/4a74fc9776d825115849997f4adacb46f4303494/doc/topics/domain-postmortem.md)
+- [Zones for JavaScript](https://github.com/domenic/zones/tree/eb65c6d43b452a877c24561cd64c6901e790ecf0)
+- [Zone.js](https://github.com/angular/angular/tree/master/packages/zone.js)
+
 
 ## Define your zones intuitively
 
