@@ -158,7 +158,12 @@ main();
 
 ```
 
-Possibly the most common use of Zones is Zone-local variables. `rezone` eliminates the untyped "zone properties" concept that is present in `zone.js` and the Zones proposal and replaces them with typed traversal of the ExecutionContext stack. 
+Possibly the most common use of Zones is Zone-local variables. `rezone` eliminates the untyped "zone properties" concept that is present in `zone.js` and the Zones proposal and replaces them with typed traversal of the ExecutionContext stack. This has a number of benefits:
+
+- No chance that two Zone-local properties with the same name will collide, unlike in `zone.js`
+- Can be dynamic (`get` / `set` properties)
+- Can be functions
+- Can be statically analyzed and thus participate in tooling (documentation, intellisense via Typescript, etc)
 
 First, know that you can get the stack of currently executing zones at any time with:
 
@@ -204,6 +209,8 @@ let theRequestId = RequestIdContext.fetch(context => context.requestId);
 ```
 
 When there is a matching context (as returned by `.current()`), `.fetch()` will call your callback. If there is not a matching context, your callback is not called, and `undefined` is returned instead.
+
+### Rationale
 
 ## How do I escape?
 
