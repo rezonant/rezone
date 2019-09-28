@@ -189,3 +189,14 @@ disabling the change detection code when
 the zone-local is appropriately set.
 
 (Zone local idioms coming soon)
+
+## But what about zones interfering with exceptions in called code?
+
+Zones have never interfered with exception handling 
+within the called code. This proposal is no
+different. The only exceptions Zones can see (and
+`ExecutionContext`s are no different) are
+exceptions which bubble to the top of an
+async task. Such error would normally
+cause an unhandledException or an uncaught
+promise rejection error.
