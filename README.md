@@ -157,3 +157,35 @@ function main() {
 main();
 
 ```
+
+## How do I escape?
+
+You do not escape a `rezone`
+ExecutionContext with async
+code, just as you do not escape a 
+function call with synchronous code.
+The caller retains control over the 
+execution of the callee just
+as synchronous execution works.
+The zone proposal made it possible 
+to change the stack of zones from 
+within just as Zone.js does, and 
+this makes handling zones correctly
+much more complicated.
+
+`rezone` does not allow you to escape 
+a zone you are running in by design.
+
+There are some use cases for zone escape,
+but such use cases can be implemented
+another way. For instance, Angular lets
+you drop out of the Angular zone to avoid 
+the performance hit of doing change detection
+using `NgZone#runOutsideAngular`. It
+implements this functionality by dropping into
+the parent zone. One could instead implement
+this functionality as a zone-local variable,
+disabling the change detection code when
+the zone-local is appropriately set.
+
+(Zone local idioms coming soon)
