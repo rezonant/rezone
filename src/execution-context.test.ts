@@ -122,6 +122,28 @@ suite(describe => {
                     expect(executionsObserved).to.equal(5);
                 }, 1000);
             });
+
+            it('tracks current ExecutionContext across async Node tasks', () => {
+                let context1 = new ExecutionContext();
+                let context2 = new ExecutionContext();
+                let contextsWithinReadFile = null;
+
+                context1.run(() => {
+                    const fs = require('fs');
+                    const path = require('path');
+
+                    fs.readFile(path.join('..', 'test', 'fixtures', 'file.txt'), (err, data) => {
+                        contextsWithinReadFile = ExecutionContext.stack();
+                        expect(ExecutionContext.stack()).to.deep.equal([ context1 ]);
+                    });
+
+                    context2.run(() => {
+                        setTimeout(() => {
+                            expect(ExecutionContext.stack()).to.deep.equal([ context2, context1 ]);
+                        }, 100);
+                    });
+                });
+            });
         });
 
         describe('.current()', it => {
