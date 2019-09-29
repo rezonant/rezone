@@ -400,7 +400,7 @@ suite(describe => {
                 setTimeout(() => {
                     expect(exceptionsCaught).to.equal(0);
                     expect(properlyRouted).to.equal(1);
-                }, 100);
+                }, 50);
             });
             it('should be called for setInterval', () => {
                 let observed = 0;
@@ -417,7 +417,7 @@ suite(describe => {
                     
                     interval = setInterval(() => {
                         clearInterval(interval);
-                    }, 100);
+                    }, 50);
                 });
 
                 expect(observed).to.equal(2);
@@ -442,7 +442,7 @@ suite(describe => {
 
                         if (iteration === 3)
                             clearInterval(interval);
-                    }, 100);
+                    }, 6);
                 });
 
                 setTimeout(() => {
@@ -450,7 +450,7 @@ suite(describe => {
                         .to.equal(4);
                     expect(iteration, "should have completed 3 iterations before clearing interval")
                         .to.equal(3);
-                }, 600);
+                }, 40);
             });
         });
     });
