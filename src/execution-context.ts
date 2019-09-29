@@ -6,15 +6,6 @@ import { ComposedExecutionContext } from "./composed-execution-context";
 export class ExecutionContext extends BaseExecutionContext implements IExecutionContext {
     private taskMap = new WeakMap<Task, ExecutionTask>();
 
-    private static _root : ExecutionContext = null;
-    public static get root() : ExecutionContext {
-        if (!this._root) {
-            this._root = new ExecutionContext();
-        }
-
-        return this._root;
-    }
-
     public static stack<T extends typeof ExecutionContext>(this : T): InstanceType<T>[] {
         let zone = Zone.current;
         let stack : InstanceType<T>[] = [];
@@ -31,12 +22,7 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
     }
 
     public static current<T extends typeof ExecutionContext>(this : T): InstanceType<T> {
-        let stackTop = this.stack()[0];
-
-        if (this === ExecutionContext)
-            return stackTop || <any>ExecutionContext.root;
-        
-        return stackTop;
+        return this.stack()[0];
     }
 
     public static fetch<T extends typeof ExecutionContext, R>(this : T, callback : (context : InstanceType<T>) => R): R {
