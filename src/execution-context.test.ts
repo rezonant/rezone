@@ -301,6 +301,32 @@ suite(describe => {
                 context.run(() => observed += 1);
                 expect(observed).to.equal(1);
             });
+            it('should retain the value of \'this\'', () => {
+                let context = new ExecutionContext();
+                let observed = 0;
+                let object = {};
+                let observedThis = undefined;
+                let callable = function() {
+                    observedThis = this;
+                };
+                let boundCallable = callable.bind(object);
+
+                context.run(boundCallable);
+                expect(observedThis).to.equal(object);
+            });
+
+            it('should run an unbound function with \'this\' set to \'window\'', () => {
+                let context = new ExecutionContext();
+                let observed = 0;
+                let object = {};
+                let observedThis = undefined;
+                let callable = function() {
+                    observedThis = this;
+                };
+
+                context.run(callable);
+                expect(observedThis).to.equal(typeof window !== 'undefined' ? window : global);
+            });
 
             it('should not eat errors thrown synchronously', () => {
                 let context = new ExecutionContext();

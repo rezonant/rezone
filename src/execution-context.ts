@@ -51,7 +51,7 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
             }
         });
 
-        return contextZone.run(() => {                   
+        return contextZone.run(() => {
             let syncTask = new ExecutionTask(func, 'sync', ExecutionContext.stack());
             this.schedule(syncTask);
 
@@ -100,8 +100,10 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
             });
 
             return executionZone.run(() => {
+                let unit = syncTask.unit.bind(typeof window !== 'undefined' ? window : global);
+
                 try {
-                    return syncTask.unit()
+                    return unit();
                 } finally {
                     syncTask.emit('finish');
                 }
