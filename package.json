@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "npm run build && node dist/test",
+    "prepare": "npm run build",
     "build": "tsc -p .",
     "start": "npm run build && node dist/example"
   },
