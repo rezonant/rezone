@@ -10,14 +10,9 @@ export class LifeCycleTracker extends ExecutionContext {
 
     private _counter = 0;
 
-    get counter() {
-        return this._counter;
-    }
-
     schedule(task : ExecutionTask) {
-        if (!this.enabled || LifeCycleTracker.current() !== this) {
+        if (!this.enabled || LifeCycleTracker.current() !== this)
             return;
-        }
 
 
         this._counter += 1;
