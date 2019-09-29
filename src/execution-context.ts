@@ -4,6 +4,10 @@ import { BaseExecutionContext } from "./base-execution-context";
 import { ComposedExecutionContext } from "./composed-execution-context";
 
 export class ExecutionContext extends BaseExecutionContext implements IExecutionContext {
+    constructor(...args) {
+        super();
+    }
+    
     private taskMap = new WeakMap<Task, ExecutionTask>();
 
     public static stack<T extends typeof ExecutionContext>(this : T): InstanceType<T>[] {
