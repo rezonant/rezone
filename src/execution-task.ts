@@ -1,3 +1,4 @@
+import { ExecutionContext } from "./execution-context";
 
 export type ExecutionTaskEvent = 'cancel' | 'finish' | string;
 
@@ -8,19 +9,16 @@ export interface TaskContainer {
 
 export class ExecutionTask {
     constructor(
-        private task : TaskContainer
-    ) {    
+        public unit : Function,
+        readonly type : 'sync' | 'microtask' | 'macrotask' = 'sync',
+        readonly contextStack : ExecutionContext[] = []
+    ) {
     }
 
     private eventMap = new Map<string, Function[]>();
     
-    get unit() {
-        return this.task.callback;
-    }
-
-    set unit(value) {
-        this.task.callback = value;
-    }
+    runCount : number = 0;
+    cancelled = false;
 
     wrap<T>(augmentor : (func : Function) => (...args) => T) {
         this.unit = augmentor(this.unit);

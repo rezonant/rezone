@@ -120,7 +120,7 @@ suite(describe => {
                 
                 setTimeout(() => {
                     expect(executionsObserved).to.equal(5);
-                }, 10);
+                }, 1000);
             });
         });
 
@@ -172,7 +172,7 @@ suite(describe => {
                 
                 setTimeout(() => {
                     expect(executionsObserved).to.equal(2);
-                }, 10);
+                }, 1000);
             });
         });
 
@@ -313,7 +313,7 @@ suite(describe => {
         });
 
         describe('#schedule()', it => {
-            it('should not be called unless a new task is scheduled', () => {
+            it('should be called only once (for sync task) unless a new task is scheduled', () => {
                 let observed = 0;
 
                 class MyContext extends ExecutionContext {
@@ -325,7 +325,7 @@ suite(describe => {
                 let context = new MyContext();
                 context.run(() => {});
 
-                expect(observed).to.equal(0);
+                expect(observed).to.equal(1);
             });
             it('should be called for a setTimeout()', () => {
                 let observed = 0;
@@ -341,7 +341,7 @@ suite(describe => {
                     setTimeout(() => {});
                 });
 
-                expect(observed).to.equal(1);
+                expect(observed).to.equal(2);
             });
             it('should be called for an outstanding Promise', () => {
                 let observed = 0;
@@ -361,7 +361,46 @@ suite(describe => {
                     promise.then(() => {});
                 });
 
-                expect(observed).to.equal(1);
+                expect(observed).to.equal(2);
+            });
+            it('should not be able to intercept a Promise rejected by Exception', () => {
+                let exceptionsCaught = 0;
+                let properlyRouted = 0;
+
+                class MyContext extends ExecutionContext {
+                    schedule(task : ExecutionTask) {
+                        if (task.type === 'sync')
+                            return;
+
+                        task.wrap(unit => (...args) => {
+                            try {
+                                unit(...args);
+                            } catch (e) {
+                                exceptionsCaught += 1;
+                                throw e;
+                            }
+                        });
+                    }
+                }
+
+                let context = new MyContext();
+                context.run(() => {
+                    let promise = Promise.resolve()
+                        .then(() => {
+                            throw new Error();
+                        })
+                        .catch(e => {
+                            properlyRouted += 1;
+                        })
+                    ;
+
+                    promise.then(() => {});
+                });
+
+                setTimeout(() => {
+                    expect(exceptionsCaught).to.equal(0);
+                    expect(properlyRouted).to.equal(1);
+                }, 100);
             });
             it('should be called for setInterval', () => {
                 let observed = 0;
@@ -381,7 +420,37 @@ suite(describe => {
                     }, 100);
                 });
 
-                expect(observed).to.equal(1);
+                expect(observed).to.equal(2);
+            });
+            it('should treat each iteration of setInterval as a new scheduled task', () => {
+                let observed = 0;
+
+                class MyContext extends ExecutionContext {
+                    schedule(task : ExecutionTask) {
+                        observed += 1;
+                    }
+                }
+
+                let context = new MyContext();
+                let iteration = 0;
+
+                context.run(() => {
+                    let interval;
+
+                    interval = setInterval(() => {
+                        ++iteration;
+
+                        if (iteration === 3)
+                            clearInterval(interval);
+                    }, 100);
+                });
+
+                setTimeout(() => {
+                    expect(observed, "should call schedule() once per setInterval iteration + 1 for sync task")
+                        .to.equal(4);
+                    expect(iteration, "should have completed 3 iterations before clearing interval")
+                        .to.equal(3);
+                }, 600);
             });
         });
     });

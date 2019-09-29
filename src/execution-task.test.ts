@@ -7,9 +7,7 @@ suite(describe => {
         describe('#removeEventListener()', it => {
             it('properly removes listeners', () => {
 
-                let executionTask = new ExecutionTask({ 
-                    callback: () => {}
-                });
+                let executionTask = new ExecutionTask(() => {});
     
                 let observedValue = 0;
                 let handler = value => {
@@ -27,9 +25,7 @@ suite(describe => {
             
             it('only affects the specified listener', () => {
 
-                let executionTask = new ExecutionTask({ 
-                    callback: () => {}
-                });
+                let executionTask = new ExecutionTask(() => {});
     
                 let observedValue = 0;
                 let handler = value => observedValue += value;
@@ -50,10 +46,7 @@ suite(describe => {
         describe('#addEventListener()', it => {
             it('registers a listener for an arbitrary event', () => {
                 
-                let executionTask = new ExecutionTask({ 
-                    callback: () => {}
-                });
-
+                let executionTask = new ExecutionTask(() => {});
                 let observedValue = undefined;
 
                 executionTask.addEventListener('foobar', value => {
@@ -66,10 +59,7 @@ suite(describe => {
             });
             it('allows multiple listeners for a single event', () => {
                 
-                let executionTask = new ExecutionTask({ 
-                    callback: () => {}
-                });
-
+                let executionTask = new ExecutionTask(() => {});
                 let observedValue = 0;
 
                 executionTask.addEventListener('foobar', value => observedValue += value);
@@ -84,7 +74,7 @@ suite(describe => {
         describe('#unit', it => {
             it('initializes to the value of the TaskContainer callback', () => {
                 let callback = () => {};
-                let executionTask = new ExecutionTask({ callback });
+                let executionTask = new ExecutionTask(callback);
                 expect(executionTask.unit).to.equal(callback);
             });
         });
@@ -94,10 +84,8 @@ suite(describe => {
                 let observedValue;
                 let counter = 0;
     
-                let executionTask = new ExecutionTask({ 
-                    callback: () => {
-                        observedValue = counter;
-                    } 
+                let executionTask = new ExecutionTask(() => {
+                    observedValue = counter;   
                 });
     
                 executionTask.wrap(unit => (...args) => {

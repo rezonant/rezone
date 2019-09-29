@@ -44,33 +44,60 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
                 'ec0:context': this
             },
             onCancelTask: (pz, cz, tz, task) => {
-                this.taskMap.get(task).emit('cancel');
+                let etask = this.taskMap.get(task);
+
+                etask.cancelled = true;
+                etask.emit('cancel');
 
                 return pz.cancelTask(tz, task);
             },
             onScheduleTask: (pz, cz, tz, task) => {
-                let etask = new ExecutionTask(task);
+                let typeMap = {
+                    microTask: 'microtask',
+                    macroTask: 'macrotask',
+                    eventTask: 'event'
+                };
+
+                let etask = new ExecutionTask(task.callback, typeMap[task.type as string], ExecutionContext.stack());
+                task.callback = (...args) => etask.unit(...args);
                 this.taskMap.set(task, etask);
 
                 let ogUnit = etask.unit;
-
                 etask.unit = (...args) => {
                     try {
-                        ogUnit(...args);
+                        return ogUnit(...args);
                     } finally {
                         etask.emit('finish');
+                        // ExecutionContexts run scheduleTask once per iteration for
+                        // setInterval.
+    
+                        if (task.source === 'setInterval') {
+                            etask.runCount += 1;
+                            if (!etask.cancelled)
+                                this.schedule(etask);
+                        }
                     }
                 };
+                    
 
                 this.schedule(etask);
-
                 return pz.scheduleTask(tz, task);
             }
         });
 
-        return zone.run(() => func());
+        return zone.run(() => {                   
+            let syncTask = new ExecutionTask(func, 'sync', ExecutionContext.stack());
+            this.schedule(syncTask);
+
+            try {
+                return syncTask.unit()
+            } finally {
+                syncTask.emit('finish');
+            }
+        });
     }
 
     schedule(task : ExecutionTask) {
+        // no op means the task is unaltered
     }
 }
