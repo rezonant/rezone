@@ -7,7 +7,7 @@ export class ComposedExecutionContext extends BaseExecutionContext {
     }
 
     public run<T>(func : () => T): T {
-        return this.contexts.reduce((composedFunc, context) => 
+        return this.contexts.reverse().reduce((composedFunc, context) => 
             () => context.run(composedFunc), func)();
     }
 }
