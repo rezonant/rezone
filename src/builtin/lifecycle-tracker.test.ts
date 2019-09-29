@@ -105,6 +105,9 @@ suite(describe => {
 
             expect(stable).to.equal(false);
             setTimeout(() => {
+                expect(stable).to.equal(false);
+            }, 40);
+            setTimeout(() => {
                 expect(stable).to.equal(true);
             }, 70);
             expect(stable).to.equal(false);

@@ -20,7 +20,14 @@ export class ExecutionTask {
     runCount : number = 0;
     cancelled = false;
 
+    private _wrapped = false;
+
+    get wrapped() {
+        return this._wrapped;
+    }
+
     wrap<T>(augmentor : (func : Function) => (...args) => T) {
+        this._wrapped = true;
         this.unit = augmentor(this.unit);
     }
 
