@@ -109,5 +109,28 @@ suite(describe => {
             }, 70);
             expect(stable).to.equal(false);
         });
+
+        it('should allow for escaping lifecycle tracking', () => {
+            let lifecycleTracker = new LifeCycleTracker();
+            let disableLifecycleTracking = new LifeCycleTracker(false);
+            let observed = '';
+
+            lifecycleTracker.addEventListener('stable', () => {
+                observed += 're-';
+            });
+
+            lifecycleTracker.run(() => {
+                setTimeout(() => {
+                    observed += 'do-';
+                }, 10);
+                disableLifecycleTracking.run(() => {
+                    setTimeout(() => {
+                        observed += 'mi-';
+                    }, 20)
+                });
+            });
+
+            setTimeout(() => expect(observed).to.equal('do-re-mi-'), 40);
+        });
     });
 });
