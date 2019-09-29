@@ -1,9 +1,14 @@
 
-export type ExecutionTaskEvent = 'cancel' | 'finish';
+export type ExecutionTaskEvent = 'cancel' | 'finish' | string;
+
+export interface TaskContainer {
+    callback : Function;
+}
+
 
 export class ExecutionTask {
     constructor(
-        private task : Task
+        private task : TaskContainer
     ) {    
     }
 
