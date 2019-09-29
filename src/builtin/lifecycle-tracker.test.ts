@@ -78,6 +78,8 @@ suite(describe => {
         it('should handle a simple promise scenario', () => {
             let tracker = new LifeCycleTracker();
             let stable = false;
+            let observed = 0;
+
             tracker.addEventListener('stable', () => {
                 stable = true;
             })
@@ -90,15 +92,9 @@ suite(describe => {
 
             expect(stable).to.equal(false);
             tracker.run(() => {
-
                 let promise = Promise.resolve().then(() => timeout(20));
-
-                promise.then(() => {
-                    return timeout(10);
-                });
-                promise.then(() => {
-                    return timeout(20);
-                });
+                promise.then(() => timeout(10)).then(() => observed += 10);
+                promise.then(() => timeout(20)).then(() => observed += 20);
 
                 expect(stable).to.equal(false);
             });
@@ -109,6 +105,7 @@ suite(describe => {
             }, 40);
             setTimeout(() => {
                 expect(stable).to.equal(true);
+                expect(observed).to.equal(30);
             }, 70);
             expect(stable).to.equal(false);
         });
