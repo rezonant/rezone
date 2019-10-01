@@ -43,6 +43,14 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         return new ComposedExecutionContext(contexts);
     }
 
+    /**
+     * Create a new function which calls the given function within this ExecutionContext when invoked.
+     * @param func Function
+     */
+    public wrap<T extends Function>(func : T): T {
+        return <any>((...args) => this.run(() => func(...args)));
+    }
+
     public run<T>(func : (...args) => T): T {
         let contextZone = Zone.current.fork({
             name: 'ExecutionContext',

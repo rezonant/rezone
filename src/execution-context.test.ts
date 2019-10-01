@@ -317,8 +317,6 @@ suite(describe => {
 
             it('should run an unbound function with \'this\' set to \'window\'', () => {
                 let context = new ExecutionContext();
-                let observed = 0;
-                let object = {};
                 let observedThis = undefined;
                 let callable = function() {
                     observedThis = this;
@@ -499,6 +497,54 @@ suite(describe => {
                     expect(iteration, "should have completed 3 iterations before clearing interval")
                         .to.equal(3);
                 }, 40);
+            });
+        });
+
+        describe('#wrap()', it => {
+            it('produces an executable function', () => {
+                expect(new ExecutionContext().wrap(() => {})).to.be.a('function');
+            });
+
+            it('produces a function that runs the original function', () => {
+                let context = new ExecutionContext();
+                let observed = false;
+
+                context.wrap(() => observed = true)();
+                expect(observed).to.be.true;
+            });
+
+            it('passes parameters through the wrapper to the original function', () => {
+                let context = new ExecutionContext();
+                let observed : any[];
+
+                context.wrap((param1, param2) => observed = [param1, param2])('foobar', 123);
+                expect(observed).to.deep.equal(['foobar', 123]);
+            });
+
+            it('runs the passed function within the context', () => {
+                let context = new ExecutionContext();
+                context.wrap(() => {
+                    expect(ExecutionContext.current()).to.equal(context);
+                })();
+            });
+
+            it('functions correctly for an integrated example', () => {
+                let context = new ExecutionContext();
+                const SAMPLE_STRING = 'hello, world';
+                const SAMPLE_NUMBER = 8675309;
+    
+                function doSomething(foo : string, bar : number) {
+                    expect(foo).to.equal(SAMPLE_STRING);
+                    expect(bar).to.equal(SAMPLE_NUMBER);
+                    expect(ExecutionContext.current()).to.equal(context);
+                }
+    
+                let wrapped = context.wrap(doSomething);
+                wrapped(SAMPLE_STRING, SAMPLE_NUMBER);
+    
+                let context2 = new ExecutionContext();
+    
+                context2.run(() => wrapped(SAMPLE_STRING, SAMPLE_NUMBER));
             });
         });
     });
