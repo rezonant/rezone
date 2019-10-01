@@ -1,4 +1,5 @@
 # rezone [WIP]
+[![CircleCI](https://circleci.com/gh/rezonant/rezone/tree/master.svg?style=svg)](https://circleci.com/gh/rezonant/rezone/tree/master)
 
 A streamlined take on the Zones API meant to be implementable as an ECMAScript standard feature. WARNING: This library is in the earliest development phase, it will change!
 
