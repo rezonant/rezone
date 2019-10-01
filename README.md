@@ -1,4 +1,4 @@
-# [WIP] rezone [![CircleCI](https://circleci.com/gh/rezonant/rezone/tree/master.svg?style=svg)](https://circleci.com/gh/rezonant/rezone/tree/master)
+# [WIP] rezone [![CircleCI](https://circleci.com/gh/rezonant/rezone/tree/master.svg?style=shield)](https://circleci.com/gh/rezonant/rezone/tree/master) [![Version](https://img.shields.io/npm/v/@rezonant/execution-context.svg)](https://www.npmjs.com/package/@alterior/annotations) ![License](https://img.shields.io/npm/l/@rezonant/execution-context.svg)
 
 **WARNING: This library is in the earliest development phase, it will change!**
 
