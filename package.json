@@ -9,6 +9,7 @@
     "test": "npm run build && node dist/test",
     "prepare": "npm run build",
     "build": "tsc -p .",
+    "build:spec": "ecmarkup spec.html dist/spec.html",
     "start": "npm run build && node dist/example"
   },
   "author": "",
@@ -21,6 +22,7 @@
     "typescript": "^3.6.3"
   },
   "dependencies": {
+    "ecmarkup": "^3.16.0",
     "zone.js": "^0.10.2"
   }
 }
