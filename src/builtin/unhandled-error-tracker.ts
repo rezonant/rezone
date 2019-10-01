@@ -2,7 +2,7 @@ import { ExecutionContext } from "../execution-context";
 import { ExecutionTask } from "../execution-task";
 
 export class UnhandledErrorTracker extends ExecutionContext {
-    constructor() {
+    constructor(readonly stopPropagation = false) {
         super();
     }
 
@@ -12,6 +12,8 @@ export class UnhandledErrorTracker extends ExecutionContext {
                 unit(...args);
             } catch (e) {
                 this.emit('error', e);
+                if (!this.stopPropagation)
+                    throw e;
             }
         });
     }

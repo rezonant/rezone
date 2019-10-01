@@ -5,6 +5,47 @@ import { ExecutionTask } from "./execution-task";
 
 suite(describe => {
     describe('ExecutionContext', it => {
+        it('propagates errors to parent contexts', () => {
+            let observedOuter = false, observedInner = false;
+
+            class ErrorObservingContext extends ExecutionContext {
+                constructor(
+                    private errorCallback : Function,
+                    private eatErrors : boolean
+                ) {
+                    super();
+                }
+
+                schedule(task : ExecutionTask) {
+                    task.wrap(unit => (...args) => {
+                        try {
+                            unit();
+                        } catch (e) {
+                            this.errorCallback(e);
+                            if (!this.eatErrors)
+                                throw e;
+                        }
+                    });
+                }
+            }
+
+            let innerContext = new ErrorObservingContext(() => observedInner = true, false);
+            let outerContext = new ErrorObservingContext(() => observedOuter = true, true);
+
+            outerContext.run(() => {
+                innerContext.run(() => {
+                    setTimeout(() => {
+                        throw new Error();
+                    })
+                })
+            });
+
+            setTimeout(() => {
+                expect(observedInner, 'should observe error in inner context').to.be.true;
+                expect(observedOuter, 'should observe error in outer context').to.be.true;
+            }, 10);
+        })
+
         describe('.stack()', it => {
             it('returns an empty array when called outside of any ExecutionContext', () => {
                 expect(ExecutionContext.stack()).to.eql([]);

@@ -2,6 +2,7 @@ import { ExecutionTask } from "./execution-task";
 import { IExecutionContext } from "./i-execution-context";
 import { BaseExecutionContext } from "./base-execution-context";
 import { ComposedExecutionContext } from "./composed-execution-context";
+import { capture, captureUnguarded } from "./privileged";
 
 export class ExecutionContext extends BaseExecutionContext implements IExecutionContext {
     constructor(...args) {
@@ -44,68 +45,114 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
     }
 
     /**
-     * Create a new function which calls the given function within this ExecutionContext when invoked.
+     * Create a new function which calls the given function within the current stack of 
+     * ExecutionContexts. This is a privileged API, only available to the host environment.
+     * 
+     * @privileged
+     * @param func 
+     */
+    public static [capture]<T extends Function>(func : T): T {
+        return <any>((...args) => this.runInZone(Zone.current, () => func(...args)));
+    }
+
+    /**
+     * Create a new function which calls the given function within the current stack of 
+     * ExecutionContexts. This is a privileged API, only available to the host environment.
+     * 
+     * @privileged
+     * @param func 
+     */
+    public static [captureUnguarded]<T extends Function>(func : T): T {
+        return <any>((...args) => {
+            try {
+                this.runInZone(Zone.current, () => func(...args));
+            } catch (e) {
+                
+            }
+        });
+    }
+
+    /**
+     * Create a new function which calls the given function within this ExecutionContext when 
+     * invoked. This call does not capture the current ExecutionContext stack, so when the 
+     * resulting function is run, it is executed within the current stack of zones as they are 
+     * outside of the call to the wrapped function.
+     * 
      * @param func Function
      */
     public wrap<T extends Function>(func : T): T {
         return <any>((...args) => this.run(() => func(...args)));
     }
 
-    public run<T>(func : (...args) => T): T {
-        let contextZone = Zone.current.fork({
+    private forkContextZone(parentZone : Zone) {
+        return parentZone.fork({
             name: 'ExecutionContext',
             properties: {
                 'ec0:context': this
             }
         });
+    }
 
+    private forkExecutionZone(contextZone : Zone) {
+        return contextZone.fork({
+            name: 'ExecutionZone',
+            onCancelTask: (pz, cz, tz, task) => {
+                let etask = this.taskMap.get(task);
+
+                etask.cancelled = true;
+                etask.emit('cancel');
+
+                return pz.cancelTask(tz, task);
+            },
+            onScheduleTask: (pz, cz, tz, task) => {
+                let typeMap = {
+                    microTask: 'microtask',
+                    macroTask: 'macrotask',
+                    eventTask: 'event'
+                };
+
+                let etask = new ExecutionTask(task.callback, typeMap[task.type as string], ExecutionContext.stack());
+                task.callback = (...args) => etask.unit(...args);
+                this.taskMap.set(task, etask);
+
+                let ogUnit = etask.unit;
+                etask.unit = (...args) => {
+                    try {
+                        return ogUnit(...args);
+                    } finally {
+                        etask.emit('finish');
+                        // ExecutionContexts run scheduleTask once per iteration for
+                        // setInterval.
+    
+                        if (task.source === 'setInterval') {
+                            etask.runCount += 1;
+                            if (!etask.cancelled)
+                                this.schedule(etask);
+                        }
+                    }
+                };
+                    
+
+                this.schedule(etask);
+                return pz.scheduleTask(tz, task);
+            }
+        });
+    }
+
+    public run<T>(func : (...args) => T): T {
+        return this.runInZone(Zone.current, func);
+    }
+
+    private static runInZone<T>(parentZone : Zone, func : (...args) => T): T {
+        return ExecutionContext.current().runInZone(parentZone, func);
+    }
+
+    private runInZone<T>(parentZone : Zone, func : (...args) => T): T {
+        let contextZone = this.forkContextZone(parentZone);
+        let executionZone = this.forkExecutionZone(contextZone);
         return contextZone.run(() => {
             let syncTask = new ExecutionTask(func, 'sync', ExecutionContext.stack());
             this.schedule(syncTask);
-
-            let executionZone = Zone.current.fork({
-                name: 'ExecutionZone',
-                onCancelTask: (pz, cz, tz, task) => {
-                    let etask = this.taskMap.get(task);
-
-                    etask.cancelled = true;
-                    etask.emit('cancel');
-
-                    return pz.cancelTask(tz, task);
-                },
-                onScheduleTask: (pz, cz, tz, task) => {
-                    let typeMap = {
-                        microTask: 'microtask',
-                        macroTask: 'macrotask',
-                        eventTask: 'event'
-                    };
-
-                    let etask = new ExecutionTask(task.callback, typeMap[task.type as string], ExecutionContext.stack());
-                    task.callback = (...args) => etask.unit(...args);
-                    this.taskMap.set(task, etask);
-
-                    let ogUnit = etask.unit;
-                    etask.unit = (...args) => {
-                        try {
-                            return ogUnit(...args);
-                        } finally {
-                            etask.emit('finish');
-                            // ExecutionContexts run scheduleTask once per iteration for
-                            // setInterval.
-        
-                            if (task.source === 'setInterval') {
-                                etask.runCount += 1;
-                                if (!etask.cancelled)
-                                    this.schedule(etask);
-                            }
-                        }
-                    };
-                        
-
-                    this.schedule(etask);
-                    return pz.scheduleTask(tz, task);
-                }
-            });
 
             return executionZone.run(() => {
                 let unit = syncTask.unit.bind(typeof window !== 'undefined' ? window : global);

@@ -33,6 +33,40 @@ suite(describe => {
             expect(callerObservedError).to.be.true;
         });
 
+        it('propagates unhandled errors from child zones to parent zones when used correctly', () => {
+            let innerZoneObservedError = false;
+            let outerZoneObservedError = false;
+
+            let zone1 = Zone.current.fork({
+                name: 'OuterZone',
+                onHandleError(pz, cz, tz, error) {
+                    outerZoneObservedError = true;
+                    return false;
+                }
+            });
+
+            zone1.run(() => {
+                let zone2 = Zone.current.fork({
+                    name: 'InnerZone',
+                    onHandleError(pz, cz, tz, error) {
+                        innerZoneObservedError = true;
+                        return pz.handleError(tz, error);
+                    }
+                });
+
+                zone2.run(() => {
+                    setTimeout(() => {
+                        throw new Error();
+                    });
+                });
+            });
+
+            setTimeout(() => {
+                expect(innerZoneObservedError, 'inner zone should observe error').to.be.true
+                expect(outerZoneObservedError, 'outer zone should observe error').to.be.true
+            }, 10);
+        });
+
         it('cannot eat synchronous thrown errors which are caught', () => {
             let zoneObservedError = false;
             let callerObservedError = false;
