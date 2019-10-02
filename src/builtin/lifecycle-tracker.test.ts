@@ -45,6 +45,43 @@ suite(describe => {
             expect(stable).to.equal(false);
         });
 
+        it.skip('should not call stable event upon clearInterval until execution has completed', () => {
+            let tracker = new LifeCycleTracker();
+            let stable = false;
+            let observed = 0;
+
+            tracker.addEventListener('stable', () => {
+                stable = true;
+            })
+
+            expect(stable).to.equal(false);
+            tracker.run(() => {
+                expect(stable).to.equal(false);
+
+                let interval;
+                let iterations = 0;
+                let maxIterations = 3;
+
+                interval = setInterval(() => {
+                    observed += 1;
+                    iterations += 1;
+
+                    if (iterations >= maxIterations) {
+                        clearInterval(interval);
+                    }
+
+                    expect(stable, `should not be stable on ${iterations}'th iteration`).to.equal(false);
+                }, 10);
+            });
+
+            expect(stable).to.equal(false);
+            setTimeout(() => {
+                expect(observed).to.equal(1);
+                expect(stable).to.equal(true);
+            }, 100)
+            expect(stable).to.equal(false);
+        });
+
         it('should handle a complex setTimeout scenario', () => {
             let tracker = new LifeCycleTracker();
             let stable = false;

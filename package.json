@@ -5,8 +5,32 @@
   "private": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "nyc": {
+    "all": true,
+
+    "extension": [
+      ".js",
+      ".ts"
+    ],
+    "include": [
+      "dist/**/*.js",
+      "src/**/*.ts"
+    ],
+
+    "exclude": [
+      "dist/**/*.test.js",
+      "src/**/*.test.ts",
+      "src/example.ts",
+      "src/test.ts",
+      "src/privileged.ts"
+    ],
+
+    "reporter": [
+      "html"
+    ]
+  },
   "scripts": {
-    "test": "npm run build && node dist/test",
+    "test": "npm run build && nyc node dist/test.js",
     "prepare": "npm run build",
     "build": "tsc -p .",
     "build:spec": "ecmarkup spec.html dist/spec.html",
@@ -18,7 +42,10 @@
     "@types/chai": "^4.2.3",
     "@types/node": "^12.7.8",
     "chai": "^4.2.0",
+    "nyc": "^14.1.1",
     "razmin": "^0.6.10",
+    "source-map-support": "^0.5.13",
+    "ts-node": "^8.4.1",
     "typescript": "^3.6.3"
   },
   "dependencies": {

@@ -11,7 +11,18 @@ suite(describe => {
             }
         }
 
+        describe('#emit()', it => {
+            it('will not throw for events that have no listeners', () => {
+                let context = new OpenExecutionContext();
+                context.emitOpen('nonexistent-event');
+            });
+        });
+
         describe('#removeEventListener()', it => {
+            it('will not throw for handlers that were not previously registered', () => {
+                let context = new OpenExecutionContext();
+                context.removeEventListener('nonexistent-event', () => {});
+            })
             it('properly removes listeners', () => {
                 let context = new OpenExecutionContext(() => {});
     

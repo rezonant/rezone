@@ -2,6 +2,7 @@ import { suite } from "razmin";
 import { expect } from 'chai';
 import { ExecutionContext } from "./execution-context";
 import { ExecutionTask } from "./execution-task";
+import { capture, captureUnguarded } from "./privileged";
 
 suite(describe => {
     describe('ExecutionContext', it => {
@@ -187,6 +188,213 @@ suite(describe => {
             });
         });
 
+        describe('.compose()', it => {
+            it('creates a context which composes all passed contexts', () => {
+                let observed = '';
+                class MockExecutionContext extends ExecutionContext {
+                    constructor(private value : string, private innerValue : string) {
+                        super();
+                    }
+        
+                    run(func : (...args) => any) {
+                        observed += this.value;
+                        return super.run(func);
+                    }
+
+                    schedule(task: ExecutionTask) {
+                        observed += '-';
+                        task.wrap(unit => (...args) => {
+                            observed += this.innerValue + '-';
+                            unit(...args);
+                        });
+                    }
+                }
+        
+                ExecutionContext.compose( 
+                    new MockExecutionContext('do', 're'),
+                    new MockExecutionContext('mi', 'fa'),
+                    new MockExecutionContext('so', 'la')
+                ).run(() => {
+        
+                });
+        
+                expect(observed).to.equal('do-re-mi-fa-so-la-');
+            })
+        });
+
+        describe('.[capture]()', it => {
+            it('creates a function which always executes within the stack of contexts that existed at the moment that [capture]() was called', () => {
+                let contextA = new ExecutionContext();
+                let contextB = new ExecutionContext();
+                let contextC = new ExecutionContext();
+                let savedFunction : Function = null;
+
+                contextA.run(() => {
+                    contextB.run(() => {
+                        contextC.run(() => {
+                            expect(ExecutionContext.stack(), 'the stack, in context, but without capture')
+                                .to.deep.equal([contextC, contextB, contextA]);
+
+                            savedFunction = ExecutionContext[capture]('macrotask', () => {
+                                expect(ExecutionContext.stack(), 'the stack, in context, with capture')
+                                    .to.deep.equal([contextC, contextB, contextA]);
+                            });
+                        });
+                    })
+                });
+
+                contextC.run(() => {
+                    savedFunction();
+                });
+            });
+            
+            it('does not interfere with thrown exceptions unless the context does', () => {
+                let contextA = new ExecutionContext();
+                let contextB = new ExecutionContext();
+
+                let savedFunction : Function = null;
+
+                contextA.run(() => {
+                    savedFunction = ExecutionContext[capture]('macrotask', () => {
+                        throw new Error();
+                    });
+                });
+
+                let caughtError = false;
+
+                contextB.run(() => {
+                    try {
+                        savedFunction();
+                    } catch (e) {
+                        caughtError = true;
+                    }
+                });
+
+                expect(caughtError).to.be.true;
+
+                let errorEaterObserved = false;
+                class ErrorEatingContext extends ExecutionContext {
+                    schedule(task) {
+                        task.wrap(unit => (...args) => {
+                            try {
+                                return unit(...args);
+                            } catch (e) {
+                                errorEaterObserved = true;
+                            }
+                        });
+                    }
+                }
+
+                let errorEater = new ErrorEatingContext();
+                let callerObserved = false;
+                let wrapped : Function;
+
+                errorEater.run(() => {
+                    wrapped = ExecutionContext[capture]('macrotask', () => {
+                        throw new Error();
+                    });
+                });
+
+                try {
+                    wrapped();
+                } catch (e) {
+                    callerObserved = true;
+                }
+                
+                expect(errorEaterObserved, 'eater context should observe the error').to.be.true;
+                expect(callerObserved, 'caller should not observe the error').to.be.false;
+
+            });
+        });
+
+        describe('.[captureUnguarded]()', it => {
+            it('runs a happy path function without throwing anything', () => {
+                
+                let contextA = new ExecutionContext();
+                let contextB = new ExecutionContext();
+
+                let savedFunction : Function = null;
+                let wasRun = false;
+
+                contextA.run(() => {
+                    savedFunction = ExecutionContext[captureUnguarded]('macrotask', () => {
+                        wasRun = true;
+                    });
+                });
+
+                let caughtError = false;
+
+                contextB.run(() => {
+                    try {
+                        savedFunction();
+                    } catch (e) {
+                        caughtError = true;
+                    }
+                });
+
+                expect(wasRun).to.be.true;
+                expect(caughtError, 'the caller of the wrapped function should be able to observe exceptions').to.be.false;
+            });
+
+            it('bypasses context exception handling and rethrows up to the caller', () => {
+                
+                let contextA = new ExecutionContext();
+                let contextB = new ExecutionContext();
+
+                let savedFunction : Function = null;
+
+                contextA.run(() => {
+                    savedFunction = ExecutionContext[captureUnguarded]('macrotask', () => {
+                        throw new Error();
+                    });
+                });
+
+                let caughtError = false;
+
+                contextB.run(() => {
+                    try {
+                        savedFunction();
+                    } catch (e) {
+                        caughtError = true;
+                    }
+                });
+
+                expect(caughtError, 'the caller of the wrapped function should be able to observe exceptions').to.be.true;
+
+                let errorEaterObserved = false;
+                class ErrorEatingContext extends ExecutionContext {
+                    schedule(task) {
+                        task.wrap(unit => (...args) => {
+                            try {
+                                unit(...args);
+                            } catch (e) {
+                                errorEaterObserved = true;
+                            }
+                        });
+                    }
+                }
+
+                let errorEater = new ErrorEatingContext();
+                let callerObserved = false;
+                let wrapped : Function;
+
+                errorEater.run(() => {
+                    wrapped = ExecutionContext[captureUnguarded]('macrotask', () => {
+                        throw new Error();
+                    });
+                });
+
+                try {
+                    wrapped();
+                } catch (e) {
+                    callerObserved = true;
+                }
+                
+                expect(errorEaterObserved, 'eater context should not observe the error').to.be.false;
+                expect(callerObserved, 'caller should observe the error').to.be.true;
+            });
+        });
+
         describe('.current()', it => {
             it('returns undefined when called outside of any ExecutionContext', () => {
                 expect(ExecutionContext.current()).to.be.undefined;
@@ -356,7 +564,7 @@ suite(describe => {
                 expect(observedThis).to.equal(object);
             });
 
-            it('should run an unbound function with \'this\' set to \'window\'', () => {
+            it('should run an unbound function with \'this\' set to \'global\'', () => {
                 let context = new ExecutionContext();
                 let observedThis = undefined;
                 let callable = function() {
@@ -365,6 +573,22 @@ suite(describe => {
 
                 context.run(callable);
                 expect(observedThis).to.equal(typeof window !== 'undefined' ? window : global);
+            });
+
+            it('should run an unbound function with \'this\' set to \'window\' when available', () => {
+                let context = new ExecutionContext();
+                let observedThis = undefined;
+
+                global['window'] = {};
+
+                let callable = function() {
+                    observedThis = this;
+                };
+
+                context.run(callable);
+                expect(observedThis).to.equal(window);
+
+                delete global['window'];
             });
 
             it('should not eat errors thrown synchronously', () => {

@@ -4,13 +4,38 @@ import { BaseExecutionContext } from "./base-execution-context";
 import { ComposedExecutionContext } from "./composed-execution-context";
 import { capture, captureUnguarded } from "./privileged";
 
+/**
+ * A mechanism for tracking, altering, or fully replacing the synchronous functions 
+ * involved in handling asynchronous flows.
+ * 
+ * Functions run within `ExecutionContext` (see `.run()`) will have their 
+ * asynchronous operations _scheduled_ by calling the `.schedule()` method of 
+ * the context instance.
+ * 
+ * Meant to be subclassed to be useful. Implement `.schedule()` to affect the execution
+ * of code within the zone.
+ */
 export class ExecutionContext extends BaseExecutionContext implements IExecutionContext {
     constructor(...args) {
         super();
     }
     
+    /**
+     * Used to create a weak association between a Zone.js `Task` instance
+     * and the `ExecutionTask` built by this library. 
+     * 
+     * This is an implementation detail of the polyfill implementation (`rezone`)
+     */
     private taskMap = new WeakMap<Task, ExecutionTask>();
 
+    /**
+     * Retrieve the current stack of `ExecutionContext`s. When called on a subclass,
+     * the returned items are filtered to those which are instances of or extend the 
+     * subclass. So, to get the current stack of `FooContext`, use `FooContext.stack()`.
+     * To get all execution contexts regardless of class, use `ExecutionContext.stack()`.
+     * 
+     * @param this 
+     */
     public static stack<T extends typeof ExecutionContext>(this : T): InstanceType<T>[] {
         let zone = Zone.current;
         let stack : InstanceType<T>[] = [];
@@ -28,10 +53,37 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         return stack;
     }
 
+    /**
+     * Fetch the top-most `ExecutionContext` which is an instance of the subclass `current()` 
+     * is called on. Given a context `FooExecutionContext`, calling `FooExecutionContext.current()`
+     * will return you the top-most context which is an instance of, or extends, `FooExecutionContext`.
+     * To enumerate all active contexts, call this as `ExecutionContext.current()`
+     * 
+     * @param this 
+     */
     public static current<T extends typeof ExecutionContext>(this : T): InstanceType<T> {
         return this.stack()[0];
     }
 
+    /**
+     * Find the topmost matching `ExecutionContext` (based on the subclass `fetch()` is called on),
+     * and if one is found, execute `callback(matchingContext)`. If no matching context is found,
+     * the given callback is not executed. The return value of the callback is passed through as
+     * the return value of `fetch()`. Thus, you can fetch a zone-local value as such:
+     * 
+     * ```typescript
+     * class MyExecutionContext extends ExecutionContext {
+     *     color : string = 'blue';
+     * }
+     * 
+     * // ...
+     * 
+     * let color : string = MyExecutionContext.fetch(context => context.color);
+     * ```
+     * 
+     * @param this 
+     * @param callback 
+     */
     public static fetch<T extends typeof ExecutionContext, R>(this : T, callback : (context : InstanceType<T>) => R): R {
         let context = this.current();
         if (context)
@@ -40,6 +92,16 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         return undefined;
     }
 
+    /**
+     * Create a new `ExecutionContext` which combines the behaviors of the given `contexts`.
+     * The order of the contexts goes from outermost to innermost, so `compose(contextA, contextB, contextC)`
+     * is equivalent to:
+     * ```typescript
+     *  contextA.run(() => contextB.run(() => contextC.run(() => codeRunInComposedContext())));
+     * ```
+     * 
+     * @param contexts 
+     */
     public static compose(...contexts : ExecutionContext[]): IExecutionContext {
         return new ComposedExecutionContext(contexts);
     }
@@ -51,8 +113,15 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
      * @privileged
      * @param func 
      */
-    public static [capture]<T extends Function>(func : T): T {
-        return <any>((...args) => this.runInZone(Zone.current, () => func(...args)));
+    public static [capture]<T extends Function>(type : 'sync' | 'macrotask' | 'microtask', func : T): T {
+        let currentContext = ExecutionContext.current();
+        let contextZone = Zone.current.parent;
+
+        return <any>((...args) => contextZone.run(() => currentContext.executeTaskInZone(type, func)));
+    }
+
+    private static getTopContextZone() {
+        return Zone.current.getZoneWith('ec0:context');
     }
 
     /**
@@ -62,12 +131,24 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
      * @privileged
      * @param func 
      */
-    public static [captureUnguarded]<T extends Function>(func : T): T {
+    public static [captureUnguarded]<T extends Function>(type : 'sync' | 'macrotask' | 'microtask', func : T): T {
+        let contextZone = this.getTopContextZone();
+        let context = ExecutionContext.current();
+        let error : any = undefined;
+
         return <any>((...args) => {
             try {
-                this.runInZone(Zone.current, () => func(...args));
-            } catch (e) {
-                
+                return context.executeTaskInZone(type, () => {
+                    try {
+                        return func(...args)
+                    } catch (e) {
+                        error = e;
+                    }
+                });
+            } finally {
+                if (error) {
+                    throw error;
+                }
             }
         });
     }
@@ -84,6 +165,13 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         return <any>((...args) => this.run(() => func(...args)));
     }
 
+    /**
+     * Construct a `Zone` that adds this `ExecutionContext` to the current
+     * context stack without applying the transformational aspects of the context
+     * defined by `schedule()`.
+     * 
+     * @param parentZone 
+     */
     private forkContextZone(parentZone : Zone) {
         return parentZone.fork({
             name: 'ExecutionContext',
@@ -93,6 +181,12 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         });
     }
 
+    /**
+     * Construct a `Zone` that represents this `ExecutionContext` by forking 
+     * the given `contextZone`.
+     * 
+     * @param contextZone 
+     */
     private forkExecutionZone(contextZone : Zone) {
         return contextZone.fork({
             name: 'ExecutionZone',
@@ -139,34 +233,85 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
         });
     }
 
+    /**
+     * Run the given function within this ExecutionContext, on top of the other 
+     * contexts found on the current ExecutionContext stack.
+     * 
+     * @param func 
+     */
     public run<T>(func : (...args) => T): T {
         return this.runInZone(Zone.current, func);
     }
 
-    private static runInZone<T>(parentZone : Zone, func : (...args) => T): T {
-        return ExecutionContext.current().runInZone(parentZone, func);
-    }
-
+    /**
+     * Run the given function within this execution context within the given `parentZone`.
+     * Normally `parentZone` is `Zone.current`, but use cases like `[capture*]()` use this
+     * mechanism to record and restore the context stack when executing the function.
+     * 
+     * This method is an implementation detail of the polyfill version of ExecutionContext
+     * (`rezone`). It would not exist in a native implementation that is part of the host 
+     * environment.
+     * 
+     * @param parentZone The `Zone.js` zone that we should fork from while creating an
+     *                   on-the-fly `Zone` for this `ExecutionContext`.
+     * @param func The function that should be executed within this `ExecutionContext`.
+     */
     private runInZone<T>(parentZone : Zone, func : (...args) => T): T {
         let contextZone = this.forkContextZone(parentZone);
-        let executionZone = this.forkExecutionZone(contextZone);
-        return contextZone.run(() => {
-            let syncTask = new ExecutionTask(func, 'sync', ExecutionContext.stack());
-            this.schedule(syncTask);
+        return contextZone.run(() => this.executeTaskInZone('sync', func));
+    }
 
-            return executionZone.run(() => {
-                let unit = syncTask.unit.bind(typeof window !== 'undefined' ? window : global);
+    private executeTaskInZone(type : 'sync' | 'macrotask' | 'microtask', func, args : any[] = []) {
+        let executionZone = this.forkExecutionZone(Zone.current);
+        let syncTask = new ExecutionTask(func, type, ExecutionContext.stack());
+        this.schedule(syncTask);
 
-                try {
-                    return unit();
-                } finally {
-                    syncTask.emit('finish');
-                }
-            });
+        return executionZone.run(() => {
+            let unit = syncTask.unit.bind(typeof window !== 'undefined' ? window : global);
+
+            try {
+                return unit(...args);
+            } finally {
+                syncTask.emit('finish');
+            }
         });
     }
 
+    /**
+     * Executed when a task is scheduled for execution.
+     * The task may be synchronous, asynchronous, or an event.
+     * This method is called at the moment the work becomes scheduled
+     * for the future. The `task.unit` property identifies the function 
+     * which will be executed once the asynchronous work is completed.
+     * 
+     * Implementations of this method may choose to replace, wrap, or 
+     * otherwise modify the `task.unit` function. Use `task.wrap()` 
+     * as a convenient way to wrap the `unit` function. Most execution
+     * contexts use this method to accomplish their use cases.
+     * 
+     * You may also choose to utilize lifecycle events on the `task`. 
+     * Use `task.addEventListener('cancel')` to know when the asynchronous
+     * task is cancelled, and thus `task.unit` will never be run (again).
+     * 
+     * Use `task.addEventListener('finish')` to know when the asynchronous
+     * work is completed and the callback (`task.unit`) has been executed.
+     * This event is emitted both when the `unit` function completes successfully
+     * as well as when `unit` throws an error.
+     * 
+     * @param task The task being scheduled
+     */
     schedule(task : ExecutionTask) {
         // no op means the task is unaltered
     }
+
+    /**
+     * Executed when code running within the execution context 
+     * has exhausted the microtask queue. This is useful if you want 
+     * to run something after all enqueued work (microtasks) has been
+     * completed. This may (and likely will) be called multiple times 
+     * as an asynchronous function is executed within the context.
+     */
+    // turn() {
+    //     // no op
+    // }
 }

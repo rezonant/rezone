@@ -4,7 +4,29 @@ import { expect } from 'chai';
 
 suite(describe => {
     describe('ExecutionTask', it => {
+        describe('#wrapped', it => {
+            it('is false if the task has not yet been wrapped', () => {
+                let executionTask = new ExecutionTask(() => {});
+                expect(executionTask.wrapped).to.be.false;
+            });
+            it('is true after #wrap() is called', () => {
+                let executionTask = new ExecutionTask(() => {});
+    
+                executionTask.wrap(unit => (...args) => {
+                    unit(...args);
+                });
+    
+                executionTask.unit();
+                expect(executionTask.wrapped).to.be.true;
+            });
+        });
+
         describe('#removeEventListener()', it => {
+            it('does not throw when removing a listener that is not registered', () => {
+                let executionTask = new ExecutionTask(() => {});
+                executionTask.removeEventListener('foobar', () => {});
+            });
+
             it('properly removes listeners', () => {
 
                 let executionTask = new ExecutionTask(() => {});
