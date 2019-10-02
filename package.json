@@ -1,13 +1,12 @@
 {
   "name": "@rezonant/execution-context",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "",
   "private": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "nyc": {
     "all": true,
-
     "extension": [
       ".js",
       ".ts"
@@ -16,7 +15,6 @@
       "dist/**/*.js",
       "src/**/*.ts"
     ],
-
     "exclude": [
       "dist/**/*.test.js",
       "src/**/*.test.ts",
@@ -24,7 +22,6 @@
       "src/test.ts",
       "src/privileged.ts"
     ],
-
     "reporter": [
       "html"
     ]
