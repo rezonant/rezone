@@ -43,10 +43,10 @@
     "razmin": "^0.6.10",
     "source-map-support": "^0.5.13",
     "ts-node": "^8.4.1",
-    "typescript": "^3.6.3"
+    "typescript": "^3.6.3",
+    "ecmarkup": "^3.16.0"
   },
   "dependencies": {
-    "ecmarkup": "^3.16.0",
     "zone.js": "^0.10.2"
   }
 }
