@@ -710,10 +710,10 @@ are not a shortcut for implementing promises.
 
 ### Couldn't I use it for implementing a snazzy unhandled promise rejection feature?
 
-No. As the implementor of a Promise library you have control over the execution 
-of the function passed to `.then()`. 
+No. As the implementor of a Promise library you have complete control over the execution 
+of the callbacks passed to `.then()` and `.catch()`. 
 
-For instance:
+For instance, pseudo-code for a Promise implementation might resemble:
 ```
 class Promise {
     // ...
@@ -721,7 +721,10 @@ class Promise {
         try {
             this.resolvedCallback(value);
         } catch (e) {
-            // do something with the unhandled promise rejection
+            if (e.hasCatchCallback)
+                e.callCatchCallback(e);
+            else
+                ; // do something with the unhandled promise rejection
         }
     }
 }
