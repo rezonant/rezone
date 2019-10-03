@@ -691,6 +691,14 @@ the parent zone. One could instead implement this functionality as a zone-local
 variable, disabling the change detection code when the zone-local is 
 appropriately set.
 
+### Really though, how could I escape?
+
+`ExecutionContext`s are not jails and are not designed to be used in a combative
+environment. Contexts are not propagated into `<script>`, nor can they propagate
+into Web Workers, Worklets, `eval()`ed code, or across VMs. Adversarily, context
+escape is possible, but using context escape (especially in a library) is an 
+anti-pattern.
+
 ### But what about zones interfering with exceptions in called code?
 
 Zones have never interfered with exception handling within the called code. This 
