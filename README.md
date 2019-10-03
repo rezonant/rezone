@@ -75,9 +75,9 @@ export declare class ExecutionContext extends BaseExecutionContext implements IE
     static current<T extends typeof ExecutionContext>(this: T): InstanceType<T>;
     static fetch<T extends typeof ExecutionContext, R>(this: T, callback: (context: InstanceType<T>) => R): R;
     static compose(...contexts: ExecutionContext[]): IExecutionContext;
-    
-    [capture]<T extends Function>(func: T): T;              // privileged API
-    [captureUnguarded]<T extends Function>(func: T): T;       // privileged API
+    static [capture]<T extends Function>(func: T): T;              // privileged API
+    static [captureUnguarded]<T extends Function>(func: T): T;       // privileged API
+
     wrap<T extends Function>(func: T): T;
     run<T>(func: (...args: any[]) => T): T;
     schedule(task: ExecutionTask): void;
