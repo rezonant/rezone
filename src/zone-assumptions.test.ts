@@ -6,6 +6,23 @@ import { expect } from "chai";
  */
 suite(describe => {
     describe('Zone', it => {
+        /**
+         * This test, if compiled with ES >=2017, will fail under Zone.js because native
+         * async/await is not and cannot be properly handled by Zone.js.
+         */
+        it('should correctly handle a Promise that straddles two zones', async () => {
+            let topZone = Zone.current;
+
+            let value = await new Promise<number>(resolve => {
+                Zone.current.fork({ name: 'TestZone' }).run(() => {
+                    resolve(123);
+                });
+            });
+
+            expect(value).to.equal(123);
+            expect(Zone.current.name).to.equal(topZone.name);
+        });
+
         it('cannot observe synchronous thrown errors which are caught', () => {
             let zoneObservedError = false;
             let callerObservedError = false;
