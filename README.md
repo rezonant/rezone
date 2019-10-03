@@ -211,8 +211,9 @@ executed.
 
 ### Zone-Locals should intuitively build on classes
 
-With `Zone`, you *can* define your Zone-local variables as properties on a class 
-that inherits `Zone`- that is technically possible, but the API itself instead 
+With `Zone`, it may be possible to define your Zone-local variables as 
+properties on a class that inherits from `Zone`, but it is definitely not the
+intended way to solve zone-locals. The `Zone` API itself instead 
 provides a `properties` object that can be used, along with some convenience 
 functions like `Zone#get()` and `Zone#getZoneWith()` that handle recursively 
 searching the Zone inheritance structure (as defined by `#fork()`).
@@ -237,38 +238,26 @@ zone.run(() => {
 });
 ```
 
-Using `Zone` with ES classes, one might write:
+If zone-local variables were properties of classes, we would be able to use
+accessors and functions in addition to simple property fields.
+
+Furthermore, the name `importantValue` has collision potential.
+You may get an unexpected value if another Zone has defined
+a `property` with the same name and sits further in the Zone lineage. 
+A better solution would avoid this problem entirely:
 
 ```typescript
-
-class MyPropertyZone extends Zone.current {
-   constructor() {
-       super({ name: 'MyPropertyZone' });
-   }
-
-   importantValue = 123;
+class MyExecutionContext extends ExecutionContext {
+    myZoneLocal : string = 'hello, world!';
 }
 
-let zone = new MyPropertyZone();
-zone.run(() => {
-    let propertyZone : MyPropertyZone = Zone.current.getZoneWith('importantValue');
-    let value = propertyZone.importantValue;
-    expect(value).to.equal(123);
+let context = new MyExecutionContext();
+context.run(() => {
+    // somewhere else, probably in an unrelated lexical scope
+    let value = MyExecutionContext.fetch(context => context.myZoneLocal, 'default value');
+    // value => 'hello, world!'
 });
 ```
-
-The two examples are equivalent, but given the `Zone` API surface,
-the correctness of the second example seems questionable enough that most 
-uses do not use it. That's too bad, because in the second example, we get the
-benefit of type safety when accessing `importantValue`.  
-
-In both examples, however, the name `importantValue` has collision potential.
-In the first version, you may get the _wrong value_ if another Zone has defined
-a `property` with the same name, whereas in the second you may get the 
-_incorrect Zone instance_ because another `Zone` has defined a property with 
-the same name. At least in the second example the caller could assert the type
-of the zone returned by `#getZoneWith()`, but a better solution would avoid 
-this problem entirely.
 
 #### Enter context-specific static methods
 
