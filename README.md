@@ -139,6 +139,8 @@ invoked should use `[capture]()`.
 
 ## Rationale
 
+### Forking, or Lack Thereof
+
 The previous Zone proposal championed by Domenic Denicola directly mirrored the 
 API surface of `Zone.js`. This included the concept of "Zone forking", allowing 
 the user to create a Zone from any other Zone and run code within it, without 
@@ -182,7 +184,182 @@ Zone.current
 ```
 
 Here, the unhandled error that occurs asynchronously within the `doStuff()` call
-is not observed by `appZone`.
+is not observed by `appZone`. We assert that the ability to fork from any zone
+other than the current zone is an anti-pattern and is not necessary to achieve
+the desired outcome. The nesting of zones should instead be based on the nesting 
+of the `ExecutionContext#run()` calls.
+
+```typescript
+let contextA = new ExecutionContext();
+let contextB = new ExecutionContext();
+let contextC = new ExecutionContext();
+
+contextA.run(() => {
+    contextB.run(() => {
+        contextC.run(() => {
+            // here the active context stack is:
+            //    [ contextC, contextB, contextA ]
+        })
+    })
+})
+```
+
+Note that there is no obvious way to subvert the natural nesting of the `#run()` 
+calls. A library cannot simply redefine the zone stack deep into the function
+being executed, just as a function cannot redefine the call stack that is being
+executed.
+
+### Zone-Locals should intuitively build on classes
+
+With `Zone`, you *can* define your Zone-local variables as properties on a class 
+that inherits `Zone`- that is technically possible, but the API itself instead 
+provides a `properties` object that can be used, along with some convenience 
+functions like `Zone#get()` and `Zone#getZoneWith()` that handle recursively 
+searching the Zone inheritance structure (as defined by `#fork()`).
+
+Most "zone-local variables" are defined using the `properties` feature, not 
+using properties on an ES `class`, simply because it is not clear that you can
+subclass a `Zone`. 
+
+Using `Zone`'s `properties`, one might write:
+
+```typescript
+let zone = Zone.current.fork({ 
+    name: 'MyPropertyZone', 
+    properties: { 
+        importantValue: 123 
+    } 
+});
+
+zone.run(() => {
+    let value = Zone.current.get('importantValue');
+    expect(value).to.equal(123);
+});
+```
+
+Using `Zone` with ES classes, one might write:
+
+```typescript
+
+class MyPropertyZone extends Zone.current {
+   constructor() {
+       super({ name: 'MyPropertyZone' });
+   }
+
+   importantValue = 123;
+}
+
+let zone = new MyPropertyZone();
+zone.run(() => {
+    let propertyZone : MyPropertyZone = Zone.current.getZoneWith('importantValue');
+    let value = propertyZone.importantValue;
+    expect(value).to.equal(123);
+});
+```
+
+The two examples are equivalent, but given the `Zone` API surface,
+the correctness of the second example seems questionable enough that most 
+uses do not use it. That's too bad, because in the second example, we get the
+benefit of type safety when accessing `importantValue`.  
+
+In both examples, however, the name `importantValue` has collision potential.
+In the first version, you may get the _wrong value_ if another Zone has defined
+a `property` with the same name, whereas in the second you may get the 
+_incorrect Zone instance_ because another `Zone` has defined a property with 
+the same name. At least in the second example the caller could assert the type
+of the zone returned by `#getZoneWith()`, but a better solution would avoid 
+this problem entirely.
+
+#### Enter context-specific static methods
+
+The `.stack()` and `.current()` methods are context-aware, if they are called 
+on the root `ExecutionContext` class, they will return an unfiltered list. If 
+called with a `SpecificExecutionContextSubclass`, they will filter the current
+context stack to include only those which inherit from 
+`SpecificExecutionContextSubclass`. This type of API can be represented within
+gradual-typing solutions such as Typescript and Flow to ensure type validation.
+
+Since the contexts that are included are based on the subclass you call 
+`.stack()` or `.current()` on, there is no danger of naming collisions, and you 
+can skip coming up with some kind of namespace strategy for your Zone-local 
+property names.
+
+### Zone.js has too many hooks
+
+Here is the current list of Zone.js hooks at the time of this writing:
+- `onCancelTask`
+- `onFork`
+- `onHandleError`
+- `onHasTask`
+- `onIntercept`
+- `onInvoke`
+- `onInvokeTask`
+- `onScheduleTask`
+
+Interestingly, almost all of the hooks can be implemented in terms of just one
+hook, `onScheduleTask`.
+
+The current design for `rezone`'s `ExecutionContext` API instead defines only 
+the following hooks:
+- `schedule`
+- `task.addEventListener('error')`
+- `task.addEventListener('finish')`
+- `turn`
+
+#### Hook: `schedule(task : ExecutionTask)`
+
+The `schedule` hook is called at the moment when a task is being 
+started. The `task` can have a `type` of `sync`, `macrotask` and `microtask`.
+A `sync` task for `f : Function` is scheduled when `ExecutionContext#run(f)` 
+is called. A `macrotask` task is scheduled when APIs like `setTimeout()`, 
+`setInterval()` are called, as well as when `XMLHttpRequest` dispatches a 
+request. 
+
+The given `task` represents the work that will be completed. It has a property
+`unit : Function` which is the reaction callback that will be executed when 
+the asynchronous operation completes.
+
+It is the responsibility of `schedule()` to alter, augment or replace 
+`task.unit` as it sees fit. It may opt to replace `unit` with a function that 
+calls the original `unit` but wrapped in some way. 
+
+An implementation may wish to wrap the scheduled function with a 
+`try / catch` in order to handle exceptions which would otherwise bubble to 
+the top of the call stack. Another implementation may wish to keep track of the 
+outstanding work for the purposes of adding custom behavior once all outstanding
+async work is completed. Yet another implementation may wish to trace the 
+path of asynchronous execution, or measure the amount of time it took to 
+execute the synchronous Javascript frames that make up an multi-step 
+asynchronous operation. All of these use cases and more can be accomplished 
+with `schedule()` alone.
+
+#### Hook: `task.addEventListener('error')`
+
+It may be important to know when an asynchronous task has been cancelled by 
+using an appropriate API (for instance `setInterval / clearInterval`). This case
+cannot be implemented via task scheduling alone, but the handling of the event
+conventionally ends up defined within the `schedule()` implementation anyway:
+
+```typescript
+    schedule(task : ExecutionTask) {
+        task.addEventListener('cancel', () => {
+            console.log('task cancelled!`);
+        })
+    }
+```
+
+#### Hook: `task.addEventListener('finish')`
+
+Similarly, it may be desirable to be notified when the task has completed 
+regardless of whether the task threw an error or returned successfully. The 
+`finish` event is fired after the task completes, but before errors are 
+reported or return values are returned.
+
+#### Hook: `turn()`
+
+When all outstanding queued work (microtasks) are finished, it may be desirable
+to run custom behavior (for instance, checking for changes to model data and 
+rendering the changes to a view). `turn()` allows you to do this efficiently.
 
 ## Features
 
