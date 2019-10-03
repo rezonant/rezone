@@ -313,7 +313,8 @@ started. The `task` can have a `type` of `sync`, `macrotask` and `microtask`.
 A `sync` task for `f : Function` is scheduled when `ExecutionContext#run(f)` 
 is called. A `macrotask` task is scheduled when APIs like `setTimeout()`, 
 `setInterval()` are called, as well as when `XMLHttpRequest` dispatches a 
-request. 
+request. A `microtask` task is scheduled when APIs like `Promise#then()` or
+`Promise#catch()` are invoked.
 
 The given `task` represents the work that will be completed. It has a property
 `unit : Function` which is the reaction callback that will be executed when 
@@ -333,7 +334,63 @@ execute the synchronous Javascript frames that make up an multi-step
 asynchronous operation. All of these use cases and more can be accomplished 
 with `schedule()` alone.
 
-#### Hook: `task.addEventListener('error')`
+##### Errors / Alternative Paths
+
+Representing error handlers using `scheduleTask()` works slightly differently. 
+Consider the following case:
+
+```typescript
+    let promise = new Promise((resolve, reject) => {
+        if (Math.rand() <= 0.5)
+            resolve();
+        else
+            reject();
+    })
+
+    promise.then(function handleThen() {
+        // do some more work
+    }).catch(function handleError() {
+        // do some more work
+    })
+```
+
+In this case, it may be important for the `ExecutionContext` to be aware of both
+potential paths of execution. If it is not clear why, consider this case:
+
+```typescript
+    let promise = new Promise((resolve, reject) => {
+        setTimeout(() => {
+            reject();
+        }, 10*1000)
+    })
+
+    promise.catch(function handleError() {
+        // do some more work
+    })
+```
+
+Here the `ExecutionContext` definitely needs to be made aware of the task
+scheduled by `.catch()`, it is in fact outstanding async work that should be 
+scheduled, and it is just as important as `.then()`.
+
+Since `schedule()` receives an `ExecutionTask` which has a single `unit` 
+function on it, it's not immediately clear how that abstraction represents 
+this behavior. However, `schedule()` is not limited to "happy path" 
+scheduling. In the case above, the following two scenarios can occur:
+
+When the promise **resolves**:
+- `schedule(new ExecutionTask(handleThen))`
+- `schedule(new ExecutionTask(handleError))`
+- `ExecutionTask(handleError) emits 'cancel' event`
+- `ExecutionTask(handleThen).unit is executed`
+
+When the promise **rejects**:
+- `schedule(new ExecutionTask(handleThen))`
+- `schedule(new ExecutionTask(handleError))`
+- `ExecutionTask(handleThen) emits 'cancel' event`
+- `ExecutionTask(handleThen).unit is executed`
+
+#### Hook: `task.addEventListener('cancel')`
 
 It may be important to know when an asynchronous task has been cancelled by 
 using an appropriate API (for instance `setInterval / clearInterval`). This case
