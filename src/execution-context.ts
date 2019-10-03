@@ -84,12 +84,12 @@ export class ExecutionContext extends BaseExecutionContext implements IExecution
      * @param this 
      * @param callback 
      */
-    public static fetch<T extends typeof ExecutionContext, R>(this : T, callback : (context : InstanceType<T>) => R): R {
+    public static fetch<T extends typeof ExecutionContext, R>(this : T, callback : (context : InstanceType<T>) => R, defaultValue? : R): R {
         let context = this.current();
         if (context)
             return callback(context);
         
-        return undefined;
+        return defaultValue;
     }
 
     /**
